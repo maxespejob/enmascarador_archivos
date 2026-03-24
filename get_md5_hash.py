@@ -2,8 +2,9 @@ import os
 import hashlib
  
 # Carpeta donde están los archivos
-DIRECTORY = "./Masking App/Files/"
- 
+DIRECTORY = "./Downloads/publish/"
+ # 20260203_111838.ctf  ->  329d6b104f1a6aac1ae561e57081c437
+ # 20260203_111838_masked.ctf  ->  388c5fcbc58609ca348e6f60a73155cf
 # Tamaño del bloque de lectura (8KB)
 BUFFER_SIZE = 8192
  

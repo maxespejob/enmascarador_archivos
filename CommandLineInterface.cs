@@ -194,7 +194,7 @@ namespace InterchangeFilesMaskingApp
 
         static void EjecutarPasoVI()
         {
-            ManageFiles.EnsureDirectoryExists(Defaults.OutputPath);
+            ManageFiles.EnsureDirectoryExists(Defaults.OutputPathVisa);
             ManageFiles.EnsureDirectoryExists(Defaults.LogPath);
 
             InterpretFilesVisa visaInterpreter = new InterpretFilesVisa();
@@ -247,14 +247,14 @@ namespace InterchangeFilesMaskingApp
             try
             {
                 InterpretFilesMC interpretador = new InterpretFilesMC(encoding);
-                ManageFiles.EnsureDirectoryExists(Defaults.OutputPath);
+                ManageFiles.EnsureDirectoryExists(Defaults.OutputPathMC);
                 ManageFiles.EnsureDirectoryExists(Defaults.LogPath);
-                if (ManageFiles.EnsureDirectoryExists(Defaults.InputPath) == 1)
+                if (ManageFiles.EnsureDirectoryExists(Defaults.InputPathMC ) == 1)
                 {
                     string errorMessage = "Input directory does not exist. Exiting program.";
                     Logger.SaveLog(errorMessage);
-                    Directory.Delete(Defaults.InputPath);
-                    Directory.Delete(Defaults.OutputPath);
+                    Directory.Delete(Defaults.InputPathMC);
+                    Directory.Delete(Defaults.OutputPathMC);
                     Console.WriteLine(errorMessage);
                     Task.Delay(2000).Wait();
                     Environment.Exit(0);

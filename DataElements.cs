@@ -385,6 +385,15 @@ namespace InterchangeFilesMaskingApp
                     }
                 },
                 {
+                    105,
+                    new Element
+                    {
+                        Name = "Additional Data 6",
+                        Type = ElementType.LLLVar,
+                        Length = 3,
+                    }
+                },
+                {
                     111,
                     new Element
                     {

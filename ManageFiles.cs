@@ -13,7 +13,6 @@ namespace InterchangeFilesMaskingApp
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-
                 return 1;
             }
 
@@ -22,84 +21,108 @@ namespace InterchangeFilesMaskingApp
 
         public static void ManageMCInterpreter(InterpretFilesMC interpretador, bool onlyMask)
         {
-            string inputDirectory = Defaults.InputPath;
-            string outputDirectory = Defaults.OutputPath;
+            string inputDirectory = Defaults.InputPathMC;
+            string outputDirectory = Defaults.OutputPathMC;
 
-            // Verificar si el directorio existe
             if (Directory.Exists(inputDirectory))
             {
-                // Obtener todos los archivos dentro del directorio
                 string[] files = Directory.GetFiles(inputDirectory);
 
-                // Mostrar cada archivo encontrado
                 foreach (string file in files)
                 {
-                    // Dividir el nombre del archivo en nombre base y extensión
                     string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file);
                     string fileExtension = Path.GetExtension(file);
 
-                    // Construir el nuevo nombre de archivo con el sufijo "_masked" antes de la extensión
-                    string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_masked{fileExtension}");
+                    // ✅ ÚNICO OUTPUT FINAL
+                    string finalFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_final_masked{fileExtension}");
 
-                    // Aplicar las operaciones sobre el archivo
-                    string tempFile = Path.Combine(Path.GetDirectoryName(file), $"{fileNameWithoutExtension}_temp{fileExtension}");
+                    // Archivos temporales internos
+                    string tempFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_temp{fileExtension}");
+                    string intermediateMasked = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_masked{fileExtension}");
 
                     if (onlyMask)
                     {
-                        bool is_succesful = interpretador.ReadAndWriteTransactions(file, outputFile);
-
-                        if(is_succesful)
+                        bool is_successful = false;
+                        try
                         {
-                            Logger.SaveLog($"{file} masked successfully.");
-                        }
-                        else
-                        {
-                            Logger.SaveLog($"{file} failed the masking process in the current configuration");
-                            Logger.SaveLog("Trying second configuration...");
+                            // Intento directo → guardar como final
+                            is_successful = interpretador.ReadAndWriteTransactions(file, finalFile);
 
-                            UnblockFilesMC.ExtractTransactionsToFile(file, tempFile);
-                            is_succesful = interpretador.ReadAndWriteTransactions(tempFile, outputFile);
-
-                            if (is_succesful)
+                            if (is_successful)
                             {
-                                Logger.SaveLog($"{file} masked successfully.");
+                                Logger.SaveLog($"{file} masked successfully (direct).");
                             }
                             else
                             {
-                                Logger.SaveLog($"{file} failed masking process.");
-                            }
+                                Logger.SaveLog($"{file} failed direct masking. Trying with unblock...");
 
-                            File.Delete(tempFile);
+                                UnblockFilesMC.ExtractTransactionsToFile(file, tempFile);
+                                is_successful = interpretador.ReadAndWriteTransactions(tempFile, intermediateMasked);
+
+                                if (is_successful)
+                                {
+                                    // Reblock hacia archivo final
+                                    byte[] controlBytes = UnblockFilesMC.ReadControlBytes(file);
+                                    UnblockFilesMC.ReblockFile(intermediateMasked, finalFile, controlBytes);
+
+                                    Logger.SaveLog($"{file} masked and reblocked successfully.");
+                                }
+                                else
+                                {
+                                    Logger.SaveLog($"{file} failed masking process in both configurations.");
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (File.Exists(tempFile))
+                                File.Delete(tempFile);
+
+                            if (File.Exists(intermediateMasked))
+                                File.Delete(intermediateMasked);
                         }
                     }
-
                     else
                     {
-                        UnblockFilesMC.ExtractTransactionsToFile(file, tempFile);
-                        bool is_succesful = interpretador.ReadAndWriteTransactions(tempFile, outputFile);
-
-                        if (is_succesful)
+                        bool is_successful = false;
+                        try
                         {
-                            Logger.SaveLog($"{file} masked successfully.");
-                        }
-                        else
-                        {
-                            Logger.SaveLog($"{file} failed the masking process in the current configuration");
-                            Logger.SaveLog("Trying second configuration...");
+                            // Flujo principal: unblock → mask → reblock → final
+                            UnblockFilesMC.ExtractTransactionsToFile(file, tempFile);
+                            is_successful = interpretador.ReadAndWriteTransactions(tempFile, intermediateMasked);
 
-                            is_succesful = interpretador.ReadAndWriteTransactions(file, outputFile);
-
-                            if(is_succesful)
+                            if (is_successful)
                             {
-                                Logger.SaveLog($"{file} masked successfully.");
+                                byte[] controlBytes = UnblockFilesMC.ReadControlBytes(file);
+                                UnblockFilesMC.ReblockFile(intermediateMasked, finalFile,controlBytes);
+
+                                Logger.SaveLog($"{file} masked and reblocked successfully.");
                             }
                             else
                             {
-                                Logger.SaveLog($"{file} failed masking process.");
-                            }                            
-                        }
+                                Logger.SaveLog($"{file} failed after unblock. Trying direct masking...");
 
-                        File.Delete(tempFile);
+                                // fallback directo → final
+                                is_successful = interpretador.ReadAndWriteTransactions(file, finalFile);
+
+                                if (is_successful)
+                                {
+                                    Logger.SaveLog($"{file} masked successfully (direct, no unblock needed).");
+                                }
+                                else
+                                {
+                                    Logger.SaveLog($"{file} failed masking process in both configurations.");
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (File.Exists(tempFile))
+                                File.Delete(tempFile);
+
+                            if (File.Exists(intermediateMasked))
+                                File.Delete(intermediateMasked);
+                        }
                     }
                 }
             }

@@ -19,8 +19,8 @@ namespace InterchangeFilesMaskingApp
         // Constructor
         public InterpretFilesVisa()
         {
-            inputDirectory = Defaults.InputPath;
-            outputDirectory = Defaults.OutputPath;
+            inputDirectory = Defaults.InputPathVisa;
+            outputDirectory = Defaults.OutputPathVisa;
             visa_files = Directory.GetFiles(inputDirectory);
         }
 
@@ -188,8 +188,10 @@ namespace InterchangeFilesMaskingApp
 
                     // Construir el nuevo nombre de archivo con el sufijo "_masked" antes de la extensión
                     string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_masked{fileExtension}");
-
-                    File.WriteAllLines(outputFile, linesToWrite);
+                    
+                    string rawContent = File.ReadAllText(path);
+                    string lineEnding = rawContent.Contains("\r\n") ? "\r\n" : "\n";
+                    File.WriteAllText(outputFile, string.Join(lineEnding, linesToWrite) + lineEnding);
 
                     Logger.SaveLog($"{path} masked successfully.");
                 }

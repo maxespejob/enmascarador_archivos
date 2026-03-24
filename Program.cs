@@ -17,11 +17,13 @@ namespace InterchangeFilesMaskingApp
 
     public class Defaults
     {
-        public const string InputPath = @".\Input\";
-        public const string OutputPath = @".\Output\";
-        public const string LogPath = @".\Logs\";
+        public static readonly string InputPathVisa = Path.Combine(".", "Input", "Visa");
+        public static readonly string InputPathMC = Path.Combine(".", "Input", "Mastercard");
+        public static readonly string OutputPathVisa = Path.Combine(".", "Output", "Visa");
+        public static readonly string OutputPathMC = Path.Combine(".", "Output", "Mastercard");
+        public static readonly string LogPath = Path.Combine(".", "Logs");
 
-        public static readonly string[] validMTI = { "1240","1644", "1740", "1442"};
+        public static readonly HashSet<string> validMTI = new HashSet<string> { "1240", "1644", "1740", "1442" };
     }
 
     public static class Logger

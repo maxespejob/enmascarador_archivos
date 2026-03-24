@@ -33,23 +33,31 @@ namespace InterchangeFilesMaskingApp
 
                     while (true)
                     {
-                        // Reading transaction length
                         reader.Seek(seekPosition, SeekOrigin.Begin);
 
-                        int trxLength = ReadTransactionLength(reader, writer);
+                        // Leer longitud sin escribir todavía
+                        byte[] lengthBytes;
+                        int trxLength = ReadTransactionLength(reader, out lengthBytes);
 
                         if (trxLength == 0)
                         {
+                            // Escribir los 4 bytes de 0000 + el resto del trailer
+                            //writer.Write(lengthBytes, 0, 4);
+                            reader.Seek(seekPosition, SeekOrigin.Begin);
+                            byte[] trailer = new byte[reader.Length - seekPosition];
+                            reader.Read(trailer, 0, trailer.Length);
+                            writer.Write(trailer, 0, trailer.Length);
                             break;
                         }
+
+                        // Solo escribir los 4 bytes de longitud si es transacción válida
+                        writer.Write(lengthBytes, 0, 4);
 
                         // Reading the type of message
                         seekPosition += 4;
                         reader.Seek(seekPosition, SeekOrigin.Begin);
 
                         string mti = ReadMTI(reader, writer, encodingType);
-
-                        // Validation step
 
                         bool is_mti_valid = Defaults.validMTI.Contains(mti);
 
@@ -59,7 +67,6 @@ namespace InterchangeFilesMaskingApp
                             return false;
                         }
 
-                        // Reading the bit map
                         seekPosition += 4;
                         reader.Seek(seekPosition, SeekOrigin.Begin);
 
@@ -72,17 +79,14 @@ namespace InterchangeFilesMaskingApp
                         {
                             Logger.SaveLogInfo(reader, seekPosition, trxLength);
                         }
-                        
 
-
-                        // Reading transaction information
                         seekPosition += 16;
 
                         int nBytes = trxLength - 20;
 
                         try
                         {
-                            ReadMaskWriteTransactionDetails(reader, writer, bitMap, seekPosition, encodingType);
+                            ReadMaskWriteTransactionDetails(reader, writer, bitMap, ref seekPosition, encodingType);
                         }
                         catch (Exception ex)
                         {
@@ -90,12 +94,6 @@ namespace InterchangeFilesMaskingApp
                             Logger.SaveLog($"Error: {ex}");
                             throw new InvalidOperationException("Something went wrong. Please review logs.");
                         }
-
-
-
-                        // Going to next transaction
-                        seekPosition += nBytes;
-
                     }
 
                     return true;
@@ -104,24 +102,19 @@ namespace InterchangeFilesMaskingApp
                 {
                     return false;
                 }
-                
             }
         }
 
-        int ReadTransactionLength(FileStream inputFile, FileStream outputFile)
+        int ReadTransactionLength(FileStream inputFile, out byte[] lengthBytes)
         {
-            // Creation of buffer to store bytes with transaction length information
             byte[] buffer = new byte[4];
-            int bytesRead = inputFile.Read(buffer, 0, buffer.Length);
+            inputFile.Read(buffer, 0, buffer.Length);
+            
+            // Guardar los bytes originales ANTES de invertir
+            lengthBytes = (byte[])buffer.Clone();
+            
             Array.Reverse(buffer);
-
-            // Conversion from bytes to int (transaction length)
             int trxLength = BitConverter.ToInt32(buffer, 0);
-
-            // Writing transaction length
-            Array.Reverse(buffer);
-            outputFile.Write(buffer, 0, bytesRead);
-
             return trxLength;
         }
 
@@ -164,7 +157,7 @@ namespace InterchangeFilesMaskingApp
         }
 
 
-        void ReadMaskWriteTransactionDetails(FileStream inputFile, FileStream outputFile, string bitMap, int seekPosition, string encodingType)
+        void ReadMaskWriteTransactionDetails(FileStream inputFile, FileStream outputFile, string bitMap, ref int seekPosition, string encodingType)
         {
             uint dataElementIndex = 2;
             var elementDict = DataElements.ElementDict;
