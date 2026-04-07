@@ -103,99 +103,126 @@ namespace InterchangeFilesMaskingApp
         }
 
         // Implement logic for masking transactions
-        public void MaskVisaTransactions ()
+        public void MaskVisaTransactions()
         {
             foreach (string path in visa_files)
             {
                 Console.WriteLine(path);
-                List<string> linesToWrite = new List<string>();
 
                 string lineWithErrors = "";
-                int? referenceLength = null; // Holds the reference line length (168 or 170)
+                int? referenceLength = null;
 
                 try
                 {
                     bool skipFile = false;
-
-                    foreach (string line in File.ReadLines(path))
-                    {
-                        // Check and set the reference line length
-                        if (!referenceLength.HasValue)
-                        {
-                            if (line.Length == 168 || line.Length == 170)
-                            {
-                                referenceLength = line.Length; // Set the reference length
-                            }
-                            else
-                            {
-                                Logger.SaveLog($"Initial line length error in file {path}. Line length is {line.Length}, but expected 168 or 170.");
-                                Logger.SaveLog("Error in line: " + line);
-                                skipFile = true;
-                                break; // Stop processing lines for this file
-                            }
-                        }
-                        else if (line.Length != referenceLength.Value)
-                        {
-                            if (line.Length >= 2 && valid_transaction_codes.Contains(line.Substring(0, 2)))
-                            {
-                                // Check if subsequent lines match the reference length
-                                Logger.SaveLog($"Line length mismatch in file {path}. Expected length {referenceLength.Value}, but got {line.Length}.");
-                                Logger.SaveLog("Error in line: " + line);
-                                skipFile = true;
-                                break; // Stop processing lines for this file
-                            }
-                            
-                        }
-
-                        if (IsAnSMSTransactionValid(line))
-                        {
-                            int report_text_initial_position = PositionWithoutSpaces(line, 34);
-
-                            int account_number_initial_position = report_text_initial_position + 96;
-
-                            string line_with_account_number_masked = line.Substring(0, account_number_initial_position + 9) + new string('*', 10) + line.Substring(account_number_initial_position + 19);
-
-                            linesToWrite.Add(line_with_account_number_masked);
-                        }
-
-                        else if (IsTransactionCodeValid(line) && IsTransactionComponentSequenceNumberValid(line))
-                        {
-                            int account_number_initial_position = PositionWithoutSpaces(line, 4);
-
-                            string line_with_account_number_masked = line.Substring(0, account_number_initial_position + 9) + new string('*', 7) + line.Substring(account_number_initial_position + 16);
-
-                            linesToWrite.Add(line_with_account_number_masked);
-                        }
-                        else
-                        {
-                            linesToWrite.Add(line);
-                        }
-
-                        lineWithErrors = line;
-                    }
-
-                    if (skipFile)
-                    {
-                        // Skip processing this file and move to the next one
-                        Logger.SaveLog($"{path} skipped due to line length errors.");
-                        continue;
-                    }
 
                     string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(path);
                     string fileExtension = Path.GetExtension(path);
 
                     ManageFiles.EnsureDirectoryExists(outputDirectory);
 
-                    // Construir el nuevo nombre de archivo con el sufijo "_masked" antes de la extensión
                     string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_masked{fileExtension}");
-                    
-                    string rawContent = File.ReadAllText(path);
-                    string lineEnding = rawContent.Contains("\r\n") ? "\r\n" : "\n";
-                    File.WriteAllText(outputFile, string.Join(lineEnding, linesToWrite) + lineEnding);
+
+                    string lineEnding = "\n"; // valor por defecto
+                    bool isLineEndingDetected = false;
+
+                    using (var writer = new StreamWriter(outputFile, false)) // false = sobrescribe
+                    {
+                        foreach (string line in File.ReadLines(path))
+                        {
+                            // Detectamos el tipo de salto de línea en la primera iteración
+                            if (!isLineEndingDetected)
+                            {
+                                using (var reader = new StreamReader(path))
+                                {
+                                    int ch;
+                                    while ((ch = reader.Read()) != -1)
+                                    {
+                                        if (ch == '\r')
+                                        {
+                                            if (reader.Peek() == '\n')
+                                                lineEnding = "\r\n";
+                                            else
+                                                lineEnding = "\r";
+                                            break;
+                                        }
+                                        else if (ch == '\n')
+                                        {
+                                            lineEnding = "\n";
+                                            break;
+                                        }
+                                    }
+                                }
+                                isLineEndingDetected = true;
+                            }
+
+                            // Validación de longitud de línea
+                            if (!referenceLength.HasValue)
+                            {
+                                if (line.Length == 168 || line.Length == 170)
+                                {
+                                    referenceLength = line.Length;
+                                }
+                                else
+                                {
+                                    Logger.SaveLog($"Initial line length error in file {path}. Line length is {line.Length}, but expected 168 or 170.");
+                                    Logger.SaveLog("Error in line: " + line);
+                                    skipFile = true;
+                                    break;
+                                }
+                            }
+                            else if (line.Length != referenceLength.Value)
+                            {
+                                if (line.Length >= 2 && valid_transaction_codes.Contains(line.Substring(0, 2)))
+                                {
+                                    Logger.SaveLog($"Line length mismatch in file {path}. Expected length {referenceLength.Value}, but got {line.Length}.");
+                                    Logger.SaveLog("Error in line: " + line);
+                                    skipFile = true;
+                                    break;
+                                }
+                            }
+
+                            string processedLine;
+
+                            if (IsAnSMSTransactionValid(line))
+                            {
+                                int report_text_initial_position = PositionWithoutSpaces(line, 34);
+                                int account_number_initial_position = report_text_initial_position + 96;
+
+                                processedLine =
+                                    line.Substring(0, account_number_initial_position + 9) +
+                                    new string('*', 10) +
+                                    line.Substring(account_number_initial_position + 19);
+                            }
+                            else if (IsTransactionCodeValid(line) && IsTransactionComponentSequenceNumberValid(line))
+                            {
+                                int account_number_initial_position = PositionWithoutSpaces(line, 4);
+
+                                processedLine =
+                                    line.Substring(0, account_number_initial_position + 9) +
+                                    new string('*', 7) +
+                                    line.Substring(account_number_initial_position + 16);
+                            }
+                            else
+                            {
+                                processedLine = line;
+                            }
+
+                            // Escribimos la línea usando el salto de línea detectado
+                            writer.Write(processedLine + lineEnding);
+
+                            lineWithErrors = line;
+                        }
+                    }
+
+                    if (skipFile)
+                    {
+                        Logger.SaveLog($"{path} skipped due to line length errors.");
+                        continue;
+                    }
 
                     Logger.SaveLog($"{path} masked successfully.");
                 }
-
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex);
@@ -206,8 +233,6 @@ namespace InterchangeFilesMaskingApp
                         Logger.SaveLog("Error in line: " + lineWithErrors);
                     }
                 }
-                
-                
             }
         }
     }
