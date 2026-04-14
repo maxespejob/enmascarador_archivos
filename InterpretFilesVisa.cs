@@ -101,139 +101,113 @@ namespace InterchangeFilesMaskingApp
             }
             return line.Length;
         }
-
+        //Forzando que el salto de línea del archivo final siempre sea el de Windows - Esto solo aplica para BTRLRO - 2026-04-14
         // Implement logic for masking transactions
-        public void MaskVisaTransactions()
+    public void MaskVisaTransactions()
+    {
+        foreach (string path in visa_files)
         {
-            foreach (string path in visa_files)
+            Console.WriteLine(path);
+
+            string lineWithErrors = "";
+            int? referenceLength = null;
+
+            try
             {
-                Console.WriteLine(path);
+                bool skipFile = false;
 
-                string lineWithErrors = "";
-                int? referenceLength = null;
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(path);
+                string fileExtension = Path.GetExtension(path);
 
-                try
+                ManageFiles.EnsureDirectoryExists(outputDirectory);
+
+                string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}{fileExtension}");
+
+                using (var writer = new StreamWriter(outputFile, false))
                 {
-                    bool skipFile = false;
+                    // 🔥 Forzar salto de línea Windows
+                    writer.NewLine = "\r\n";
 
-                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(path);
-                    string fileExtension = Path.GetExtension(path);
-
-                    ManageFiles.EnsureDirectoryExists(outputDirectory);
-
-                    string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}{fileExtension}");
-
-                    string lineEnding = "\n"; // valor por defecto
-                    bool isLineEndingDetected = false;
-
-                    using (var writer = new StreamWriter(outputFile, false)) // false = sobrescribe
+                    foreach (string line in File.ReadLines(path))
                     {
-                        foreach (string line in File.ReadLines(path))
+                        // Validación de longitud de línea
+                        if (!referenceLength.HasValue)
                         {
-                            // Detectamos el tipo de salto de línea en la primera iteración
-                            if (!isLineEndingDetected)
+                            if (line.Length == 168 || line.Length == 170)
                             {
-                                using (var reader = new StreamReader(path))
-                                {
-                                    int ch;
-                                    while ((ch = reader.Read()) != -1)
-                                    {
-                                        if (ch == '\r')
-                                        {
-                                            if (reader.Peek() == '\n')
-                                                lineEnding = "\r\n";
-                                            else
-                                                lineEnding = "\r";
-                                            break;
-                                        }
-                                        else if (ch == '\n')
-                                        {
-                                            lineEnding = "\n";
-                                            break;
-                                        }
-                                    }
-                                }
-                                isLineEndingDetected = true;
-                            }
-
-                            // Validación de longitud de línea
-                            if (!referenceLength.HasValue)
-                            {
-                                if (line.Length == 168 || line.Length == 170)
-                                {
-                                    referenceLength = line.Length;
-                                }
-                                else
-                                {
-                                    Logger.SaveLog($"Initial line length error in file {path}. Line length is {line.Length}, but expected 168 or 170.");
-                                    Logger.SaveLog("Error in line: " + line);
-                                    skipFile = true;
-                                    break;
-                                }
-                            }
-                            else if (line.Length != referenceLength.Value)
-                            {
-                                if (line.Length >= 2 && valid_transaction_codes.Contains(line.Substring(0, 2)))
-                                {
-                                    Logger.SaveLog($"Line length mismatch in file {path}. Expected length {referenceLength.Value}, but got {line.Length}.");
-                                    Logger.SaveLog("Error in line: " + line);
-                                    skipFile = true;
-                                    break;
-                                }
-                            }
-
-                            string processedLine;
-
-                            if (IsAnSMSTransactionValid(line))
-                            {
-                                int report_text_initial_position = PositionWithoutSpaces(line, 34);
-                                int account_number_initial_position = report_text_initial_position + 96;
-
-                                processedLine =
-                                    line.Substring(0, account_number_initial_position + 9) +
-                                    new string('*', 10) +
-                                    line.Substring(account_number_initial_position + 19);
-                            }
-                            else if (IsTransactionCodeValid(line) && IsTransactionComponentSequenceNumberValid(line))
-                            {
-                                int account_number_initial_position = PositionWithoutSpaces(line, 4);
-
-                                processedLine =
-                                    line.Substring(0, account_number_initial_position + 9) +
-                                    new string('*', 7) +
-                                    line.Substring(account_number_initial_position + 16);
+                                referenceLength = line.Length;
                             }
                             else
                             {
-                                processedLine = line;
+                                Logger.SaveLog($"Initial line length error in file {path}. Line length is {line.Length}, but expected 168 or 170.");
+                                Logger.SaveLog("Error in line: " + line);
+                                skipFile = true;
+                                break;
                             }
-
-                            // Escribimos la línea usando el salto de línea detectado
-                            writer.Write(processedLine + lineEnding);
-
-                            lineWithErrors = line;
                         }
-                    }
+                        else if (line.Length != referenceLength.Value)
+                        {
+                            if (line.Length >= 2 && valid_transaction_codes.Contains(line.Substring(0, 2)))
+                            {
+                                Logger.SaveLog($"Line length mismatch in file {path}. Expected length {referenceLength.Value}, but got {line.Length}.");
+                                Logger.SaveLog("Error in line: " + line);
+                                skipFile = true;
+                                break;
+                            }
+                        }
 
-                    if (skipFile)
-                    {
-                        Logger.SaveLog($"{path} skipped due to line length errors.");
-                        continue;
-                    }
+                        string processedLine;
 
-                    Logger.SaveLog($"{path} masked successfully.");
+                        if (IsAnSMSTransactionValid(line))
+                        {
+                            int report_text_initial_position = PositionWithoutSpaces(line, 34);
+                            int account_number_initial_position = report_text_initial_position + 96;
+
+                            processedLine =
+                                line.Substring(0, account_number_initial_position + 9) +
+                                new string('*', 10) +
+                                line.Substring(account_number_initial_position + 19);
+                        }
+                        else if (IsTransactionCodeValid(line) && IsTransactionComponentSequenceNumberValid(line))
+                        {
+                            int account_number_initial_position = PositionWithoutSpaces(line, 4);
+
+                            processedLine =
+                                line.Substring(0, account_number_initial_position + 9) +
+                                new string('*', 7) +
+                                line.Substring(account_number_initial_position + 16);
+                        }
+                        else
+                        {
+                            processedLine = line;
+                        }
+
+                        // ✅ Escribir con salto de línea Windows
+                        writer.WriteLine(processedLine);
+
+                        lineWithErrors = line;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
-                    Logger.SaveLog($"{path} failed masking process.");
 
-                    if (lineWithErrors != "")
-                    {
-                        Logger.SaveLog("Error in line: " + lineWithErrors);
-                    }
+                if (skipFile)
+                {
+                    Logger.SaveLog($"{path} skipped due to line length errors.");
+                    continue;
+                }
+
+                Logger.SaveLog($"{path} masked successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                Logger.SaveLog($"{path} failed masking process.");
+
+                if (lineWithErrors != "")
+                {
+                    Logger.SaveLog("Error in line: " + lineWithErrors);
                 }
             }
         }
+    }
     }
 }
