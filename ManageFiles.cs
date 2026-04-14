@@ -34,7 +34,7 @@ namespace InterchangeFilesMaskingApp
                     string fileExtension = Path.GetExtension(file);
 
                     // ✅ ÚNICO OUTPUT FINAL
-                    string finalFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_final_masked{fileExtension}");
+                    string finalFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}{fileExtension}");
 
                     // Archivos temporales internos
                     string tempFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_temp{fileExtension}");

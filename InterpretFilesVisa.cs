@@ -121,7 +121,7 @@ namespace InterchangeFilesMaskingApp
 
                     ManageFiles.EnsureDirectoryExists(outputDirectory);
 
-                    string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}_masked{fileExtension}");
+                    string outputFile = Path.Combine(outputDirectory, $"{fileNameWithoutExtension}{fileExtension}");
 
                     string lineEnding = "\n"; // valor por defecto
                     bool isLineEndingDetected = false;
